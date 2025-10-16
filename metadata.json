@@ -1,0 +1,5 @@
+{
+  "name": " Cloudera License Calculator v2",
+  "description": "A responsive, single-page web application that functions as a Cloudera license calculator. It allows users to input the number of nodes for various server types across different environments and automatically calculates the required software license quantities, summarizing them in a Bill of Quantities (BoQ).",
+  "requestFramePermissions": []
+}
