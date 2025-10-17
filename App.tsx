@@ -1135,6 +1135,81 @@ const BoQTab: React.FC<{ allCalculatedLicenses: { [envId: string]: CalculatedLic
     );
 };
 
+const ExportWorkspaceModal: React.FC<{
+    workspace: Workspace,
+    isOpen: boolean,
+    onClose: () => void,
+    onExport: (selectedIds?: string[]) => void,
+}> = ({ workspace, isOpen, onClose, onExport }) => {
+    const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(workspace.sessions.map(s => s.id)));
+
+    const handleToggle = (sessionId: string) => {
+        setSelectedIds(prev => {
+            const newSet = new Set(prev);
+            if (newSet.has(sessionId)) {
+                newSet.delete(sessionId);
+            } else {
+                newSet.add(sessionId);
+            }
+            return newSet;
+        });
+    };
+    
+    const handleSelectAll = () => setSelectedIds(new Set(workspace.sessions.map(s => s.id)));
+    const handleDeselectAll = () => setSelectedIds(new Set());
+
+    if (!isOpen) return null;
+
+    return (
+        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
+            <div className="bg-cloudera-card-bg rounded-lg shadow-2xl p-6 w-full max-w-lg border border-cloudera-accent-blue/30" onClick={e => e.stopPropagation()}>
+                <h2 className="text-xl font-bold text-cloudera-orange mb-4">Export Workspace</h2>
+                <p className="mb-4 text-gray-300">Select which calculators to export. "Export All" creates a full backup. "Export Selected" is for sharing.</p>
+
+                <div className="flex gap-2 mb-4">
+                    <button onClick={handleSelectAll} className="text-sm text-cloudera-orange hover:underline">Select All</button>
+                    <span className="text-gray-500">|</span>
+                    <button onClick={handleDeselectAll} className="text-sm text-gray-400 hover:underline">Deselect All</button>
+                </div>
+                <div className="max-h-60 overflow-y-auto space-y-2 pr-2 border-y border-cloudera-accent-blue/20 py-2">
+                    {workspace.sessions.map(session => (
+                        <label key={session.id} className="flex items-center p-2 rounded-md bg-cloudera-deep-blue/50 cursor-pointer hover:bg-cloudera-accent-blue/20">
+                            <input
+                                type="checkbox"
+                                checked={selectedIds.has(session.id)}
+                                onChange={() => handleToggle(session.id)}
+                                className="h-4 w-4 rounded bg-cloudera-card-bg border-cloudera-accent-blue text-cloudera-orange focus:ring-cloudera-orange"
+                            />
+                            <span className="ml-3 text-white truncate">{session.name}</span>
+                        </label>
+                    ))}
+                </div>
+                
+                <div className="flex justify-between items-center mt-6">
+                     <button 
+                        onClick={() => { onExport(); onClose(); }} 
+                        className="px-4 py-2 rounded-md text-gray-200 bg-cloudera-accent-blue/50 hover:bg-cloudera-accent-blue/80 transition-colors text-sm"
+                        title="Export a full backup of all calculators"
+                    >
+                        Export All (Backup)
+                    </button>
+                    <div className="flex justify-end gap-4">
+                        <button onClick={onClose} className="px-4 py-2 rounded-md text-gray-200 bg-cloudera-accent-blue/30 hover:bg-cloudera-accent-blue/50 transition-colors">Cancel</button>
+                        <button 
+                            onClick={() => { onExport(Array.from(selectedIds)); onClose(); }} 
+                            disabled={selectedIds.size === 0}
+                            className={`px-4 py-2 rounded-md font-bold text-white transition-colors bg-cloudera-orange hover:bg-orange-500 disabled:bg-gray-500 disabled:cursor-not-allowed`}
+                        >
+                            Export Selected ({selectedIds.size})
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+};
+
+
 const HwExportModal: React.FC<{
     environments: EnvironmentData[],
     isOpen: boolean,
@@ -1289,6 +1364,7 @@ const App: React.FC = () => {
     const [sessionToDelete, setSessionToDelete] = useState<Session | null>(null);
     const [toastMessage, setToastMessage] = useState<string | null>(null);
     const [workspaceToImport, setWorkspaceToImport] = useState<string | null>(null);
+    const [isExportModalOpen, setIsExportModalOpen] = useState(false);
     const toastTimeoutRef = useRef<number | null>(null);
 
     useEffect(() => {
@@ -1565,19 +1641,38 @@ const App: React.FC = () => {
         setSessionToDelete(null);
     };
 
-    const handleExportWorkspace = useCallback(() => {
+    const handleExportWorkspace = useCallback((selectedIds?: string[]) => {
         if (!workspace) {
             showToast("No workspace to export.");
             return;
         }
         try {
-            const jsonString = JSON.stringify(workspace, null, 2);
+            let workspaceToExport: Workspace = workspace;
+            const isSelectionExport = selectedIds !== undefined;
+
+            if (isSelectionExport) {
+                if (selectedIds.length === 0) {
+                    showToast("No calculators selected to export.");
+                    return;
+                }
+                const selectedSessions = workspace.sessions.filter(s => selectedIds.includes(s.id));
+                workspaceToExport = {
+                    ...workspace,
+                    sessions: selectedSessions,
+                    activeSessionId: selectedSessions[0]?.id || null,
+                };
+            }
+
+            const jsonString = JSON.stringify(workspaceToExport, null, 2);
             const blob = new Blob([jsonString], { type: "application/json" });
             const href = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = href;
             const date = new Date().toISOString().slice(0, 10);
-            link.download = `cloudera_calculator_backup_${date}.json`;
+            link.download = isSelectionExport 
+                ? `cloudera_calculator_share_${date}.json`
+                : `cloudera_calculator_backup_all_${date}.json`;
+            
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
@@ -1588,6 +1683,7 @@ const App: React.FC = () => {
             showToast("Error exporting workspace.");
         }
     }, [workspace]);
+
 
     const handleImportWorkspace = useCallback((event: React.ChangeEvent<HTMLInputElement>) => {
         const file = event.target.files?.[0];
@@ -1715,6 +1811,12 @@ const App: React.FC = () => {
                 <p>Are you sure you want to import this workspace?</p>
                 <p className="mt-2 text-gray-400">This will <span className="font-bold text-white">add</span> the calculators from the file to your current list of workspaces.</p>
             </Modal>}
+            {isExportModalOpen && <ExportWorkspaceModal
+                workspace={workspace}
+                isOpen={isExportModalOpen}
+                onClose={() => setIsExportModalOpen(false)}
+                onExport={handleExportWorkspace}
+            />}
             <Sidebar 
                 workspace={workspace} 
                 isOpen={isSidebarOpen}
@@ -1726,7 +1828,7 @@ const App: React.FC = () => {
                 onUpdateSessionName={handleUpdateSessionName}
                 editingSessionId={editingSessionId}
                 setEditingSessionId={setEditingSessionId}
-                onExportWorkspace={handleExportWorkspace}
+                onExportWorkspace={() => setIsExportModalOpen(true)}
                 onImportWorkspace={handleImportWorkspace}
             />
             <div className={`flex-1 flex flex-col transition-all duration-300 ${isSidebarOpen ? 'ml-64' : 'ml-16'}`}>
