@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 // TYPES
@@ -1142,6 +1143,7 @@ const ExportWorkspaceModal: React.FC<{
     onExport: (selectedIds?: string[]) => void,
 }> = ({ workspace, isOpen, onClose, onExport }) => {
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set(workspace.sessions.map(s => s.id)));
+    const [exportType, setExportType] = useState<'share' | 'backup'>('share');
 
     const handleToggle = (sessionId: string) => {
         setSelectedIds(prev => {
@@ -1160,49 +1162,79 @@ const ExportWorkspaceModal: React.FC<{
 
     if (!isOpen) return null;
 
+    const handleConfirmExport = () => {
+        if (exportType === 'backup') {
+            onExport();
+        } else {
+            if (selectedIds.size > 0) {
+                onExport(Array.from(selectedIds));
+            }
+        }
+        onClose();
+    };
+
     return (
         <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
             <div className="bg-cloudera-card-bg rounded-lg shadow-2xl p-6 w-full max-w-lg border border-cloudera-accent-blue/30" onClick={e => e.stopPropagation()}>
                 <h2 className="text-xl font-bold text-cloudera-orange mb-4">Export Workspace</h2>
-                <p className="mb-4 text-gray-300">Select which calculators to export. "Export All" creates a full backup. "Export Selected" is for sharing.</p>
-
-                <div className="flex gap-2 mb-4">
-                    <button onClick={handleSelectAll} className="text-sm text-cloudera-orange hover:underline">Select All</button>
-                    <span className="text-gray-500">|</span>
-                    <button onClick={handleDeselectAll} className="text-sm text-gray-400 hover:underline">Deselect All</button>
-                </div>
-                <div className="max-h-60 overflow-y-auto space-y-2 pr-2 border-y border-cloudera-accent-blue/20 py-2">
-                    {workspace.sessions.map(session => (
-                        <label key={session.id} className="flex items-center p-2 rounded-md bg-cloudera-deep-blue/50 cursor-pointer hover:bg-cloudera-accent-blue/20">
-                            <input
-                                type="checkbox"
-                                checked={selectedIds.has(session.id)}
-                                onChange={() => handleToggle(session.id)}
-                                className="h-4 w-4 rounded bg-cloudera-card-bg border-cloudera-accent-blue text-cloudera-orange focus:ring-cloudera-orange"
-                            />
-                            <span className="ml-3 text-white truncate">{session.name}</span>
-                        </label>
-                    ))}
-                </div>
                 
-                <div className="flex justify-between items-center mt-6">
-                     <button 
-                        onClick={() => { onExport(); onClose(); }} 
-                        className="px-4 py-2 rounded-md text-gray-200 bg-cloudera-accent-blue/50 hover:bg-cloudera-accent-blue/80 transition-colors text-sm"
-                        title="Export a full backup of all calculators"
-                    >
-                        Export All (Backup)
-                    </button>
-                    <div className="flex justify-end gap-4">
-                        <button onClick={onClose} className="px-4 py-2 rounded-md text-gray-200 bg-cloudera-accent-blue/30 hover:bg-cloudera-accent-blue/50 transition-colors">Cancel</button>
+                <div className="mb-4">
+                    <p className="text-gray-300 mb-2">What would you like to do?</p>
+                    <div className="flex flex-col sm:flex-row gap-2 rounded-md bg-cloudera-deep-blue p-1">
                         <button 
-                            onClick={() => { onExport(Array.from(selectedIds)); onClose(); }} 
-                            disabled={selectedIds.size === 0}
-                            className={`px-4 py-2 rounded-md font-bold text-white transition-colors bg-cloudera-orange hover:bg-orange-500 disabled:bg-gray-500 disabled:cursor-not-allowed`}
+                            onClick={() => setExportType('backup')}
+                            className={`flex-1 text-center px-3 py-2 text-sm rounded-md transition-colors ${exportType === 'backup' ? 'bg-cloudera-orange text-white font-semibold' : 'text-gray-300 hover:bg-cloudera-accent-blue/20'}`}
                         >
-                            Export Selected ({selectedIds.size})
+                            Backup All Calculators
+                        </button>
+                        <button 
+                            onClick={() => setExportType('share')}
+                            className={`flex-1 text-center px-3 py-2 text-sm rounded-md transition-colors ${exportType === 'share' ? 'bg-cloudera-orange text-white font-semibold' : 'text-gray-300 hover:bg-cloudera-accent-blue/20'}`}
+                        >
+                            Share Specific Calculators
                         </button>
                     </div>
+                </div>
+
+                {exportType === 'backup' && (
+                     <div className="border-t border-cloudera-accent-blue/20 pt-4">
+                        <p className="text-gray-300">This will export a single JSON file containing all your calculators. This is useful for creating a full backup.</p>
+                    </div>
+                )}
+
+                {exportType === 'share' && (
+                    <div className="border-t border-cloudera-accent-blue/20 pt-4">
+                        <p className="mb-2 text-gray-300">Select which calculators to export for sharing:</p>
+                        <div className="flex gap-2 mb-2">
+                            <button onClick={handleSelectAll} className="text-sm text-cloudera-orange hover:underline">Select All</button>
+                            <span className="text-gray-500">|</span>
+                            <button onClick={handleDeselectAll} className="text-sm text-gray-400 hover:underline">Deselect All</button>
+                        </div>
+                        <div className="max-h-60 overflow-y-auto space-y-2 pr-2 border-y border-cloudera-accent-blue/20 py-2">
+                            {workspace.sessions.map(session => (
+                                <label key={session.id} className="flex items-center p-2 rounded-md bg-cloudera-deep-blue/50 cursor-pointer hover:bg-cloudera-accent-blue/20">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedIds.has(session.id)}
+                                        onChange={() => handleToggle(session.id)}
+                                        className="h-4 w-4 rounded bg-cloudera-card-bg border-cloudera-accent-blue text-cloudera-orange focus:ring-cloudera-orange"
+                                    />
+                                    <span className="ml-3 text-white truncate">{session.name}</span>
+                                </label>
+                            ))}
+                        </div>
+                    </div>
+                )}
+                
+                <div className="flex justify-end gap-4 mt-6">
+                    <button onClick={onClose} className="px-4 py-2 rounded-md text-gray-200 bg-cloudera-accent-blue/30 hover:bg-cloudera-accent-blue/50 transition-colors">Cancel</button>
+                    <button 
+                        onClick={handleConfirmExport}
+                        disabled={exportType === 'share' && selectedIds.size === 0}
+                        className={`px-4 py-2 rounded-md font-bold text-white transition-colors bg-cloudera-orange hover:bg-orange-500 disabled:bg-gray-500 disabled:cursor-not-allowed`}
+                    >
+                        {exportType === 'backup' ? 'Export All' : `Export Selected (${selectedIds.size})`}
+                    </button>
                 </div>
             </div>
         </div>
